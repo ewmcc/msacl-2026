@@ -1,0 +1,3 @@
+-e git+https://github.com/dgretton/pyhamilton.git#egg=pyhamilton
+notebook
+ipykernel
