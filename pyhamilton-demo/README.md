@@ -5,9 +5,14 @@ A beginner-friendly demo of [pyhamilton](https://github.com/dgretton/pyhamilton)
 The notebook [pyhamilton_demo.ipynb](pyhamilton_demo.ipynb) loads the VENUS layout
 `C:\Program Files (x86)\HAMILTON\Methods\Demo\msacl-2026-demo.lay` and runs these steps:
 
-1. Picks up 8 tips.
-2. Aspirates 700 uL of water from the center trough.
-3. Dispenses into each well of the 96-well plate, one column at a time.
+1. Adds 700 uL of internal standard (acetonitrile) from the center trough to every well of the 96-well plate.
+   The same 8 tips are pre-mixed 3 times, used for all 12 columns, then thrown away.
+2. Adds 100 uL of patient sample from the glass tubes on 3 sample carriers (samples 1-96 go to wells A1-H12).
+   Each batch of 8 uses new tips.
+3. Mixes each well 3 times (400 uL) right after the sample is added.
+
+The first run also creates the liquid class `HighVolumeFilter_Acetonitrile_DispenseJet_Empty`.
+It is a copy of VENUS's acetonitrile class, changed to work with 1000 uL filter tips.
 
 ## Prerequisites
 
