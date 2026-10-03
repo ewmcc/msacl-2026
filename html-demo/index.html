@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive Histogram</title>
+<style>
+  :root {
+    --sidebar-w: 250px;
+    --border: #dee2e6;
+    --sidebar-bg: #f8f8f8;
+    --text: #212529;
+    --muted: #6c757d;
+    --accent: #007bc2;
+    --track: #dee2e6;
+    --bar: #1f77b4;
+    --bar-hover: #2b8fd6;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #fff;
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  h2, h3 { font-weight: 500; line-height: 1.2; margin: 0 0 1rem; }
+  h2 { font-size: 1.75rem; }
+  h3 { font-size: 1.5rem; }
+
+  /* ---- page_sidebar layout ---- */
+  .layout {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    min-height: 100vh;
+    transition: grid-template-columns 0.25s ease;
+  }
+  .layout.collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .sidebar {
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .sidebar-content {
+    width: var(--sidebar-w);
+    padding: 1.5rem 1.25rem;
+    transition: opacity 0.2s ease;
+  }
+  .layout.collapsed .sidebar-content { opacity: 0; visibility: hidden; }
+  .layout.collapsed .sidebar { border-right: none; }
+  .main { padding: 1.5rem; min-width: 0; transition: padding-left 0.25s ease; }
+  .layout.collapsed .main { padding-left: 3.25rem; }
+
+  .collapse-toggle {
+    position: absolute;
+    top: 0.75rem;
+    left: calc(var(--sidebar-w) - 0.75rem);
+    z-index: 2;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--muted);
+    cursor: pointer;
+    transition: left 0.25s ease, color 0.15s;
+  }
+  .collapse-toggle:hover { color: var(--text); }
+  .collapse-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .collapse-toggle svg { width: 0.85rem; height: 0.85rem; transition: transform 0.25s ease; }
+  .layout.collapsed .collapse-toggle { left: 0.75rem; }
+  .layout.collapsed .collapse-toggle svg { transform: rotate(180deg); }
+
+  /* ---- slider (approximates Shiny's ionRangeSlider) ---- */
+  .form-group { margin-bottom: 1rem; }
+  .control-label { display: block; font-weight: 500; margin-bottom: 0.5rem; }
+  .slider-wrap { position: relative; padding-top: 1.9rem; }
+  .slider-bubble {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .slider-bubble::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    margin-left: -4px;
+    border: 4px solid transparent;
+    border-bottom: none;
+    border-top-color: var(--accent);
+  }
+  input[type="range"] {
+    --pct: 0%;
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 16px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(to right, var(--accent) var(--pct), var(--track) var(--pct));
+  }
+  input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--track); }
+  input[type="range"]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px rgba(0, 123, 194, 0.3); }
+  input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px rgba(0, 123, 194, 0.3); }
+  .slider-grid { position: relative; height: 1.5rem; margin: 0.15rem 8px 0; }
+  .slider-grid span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    color: var(--muted);
+    padding-top: 5px;
+  }
+  .slider-grid span::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1px;
+    height: 4px;
+    background: #adb5bd;
+  }
+
+  /* ---- plot ---- */
+  .plot-output { width: 100%; height: 400px; }
+  .plot-output svg { display: block; }
+  .plot-output .bar { fill: var(--bar); }
+  .plot-output .bar:hover { fill: var(--bar-hover); }
+  .plot-output text { font-family: "DejaVu Sans", Verdana, system-ui, sans-serif; fill: #000; }
+
+  @media (max-width: 767.98px) {
+    .layout, .layout.collapsed { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+    .sidebar-content { width: auto; padding: 1rem; }
+    .layout.collapsed .sidebar { display: none; }
+    .main, .layout.collapsed .main { padding: 1rem; }
+    .collapse-toggle { left: auto; right: 0.75rem; }
+    .layout.collapsed .collapse-toggle { left: auto; position: static; margin: 0.75rem 0 0 0.75rem; }
+    .collapse-toggle svg { transform: rotate(90deg); }
+    .layout.collapsed .collapse-toggle svg { transform: rotate(-90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="layout" id="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-content">
+      <h2>Histogram Controls</h2>
+      <div class="form-group">
+        <label class="control-label" for="bins">Number of Bins</label>
+        <div class="slider-wrap">
+          <output class="slider-bubble" id="bins-bubble" for="bins">10</output>
+          <input type="range" id="bins" min="5" max="30" step="1" value="10">
+        </div>
+        <div class="slider-grid" id="bins-grid" aria-hidden="true"></div>
+      </div>
+    </div>
+  </aside>
+  <button class="collapse-toggle" id="toggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Toggle sidebar">
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+  </button>
+  <main class="main">
+    <h3>Interactive Histogram</h3>
+    <div class="plot-output" id="hist_plot"></div>
+  </main>
+</div>
+
+<script>
+// Same data as app.py: np.random.seed(123); x = 100 + 15 * np.random.randn(456)
+// (generated once with NumPy and embedded so the histogram matches exactly)
+const DATA = [83.715541,114.960182,104.244677,77.405579,91.320996,124.771548,63.599811,93.566311,118.989044,86.998894,89.816708,98.579365,122.370844,90.416470,93.340271,93.484731,133.088951,132.801791,115.060808,105.792796,111.060529,122.360980,85.962492,117.637436,81.191790,90.433727,113.606578,78.569789,97.898969,87.073677,96.165709,58.021163,73.427003,89.501841,113.911936,97.395465,100.042689,110.323341,86.806955,104.254410,87.919502,74.084958,94.136503,108.607088,105.078836,99.822543,135.885479,106.193682,114.681040,133.572150,80.588720,84.418177,126.155683,88.029059,100.445248,116.039740,113.360596,126.323293,122.434662,116.040890,88.409369,111.922940,104.714080,80.106018,121.259486,112.108548,100.682351,96.503619,82.025483,102.992861,107.026587,87.532675,117.433061,83.541954,68.153495,115.595906,93.949509,98.109556,87.437249,75.910559,118.828561,89.666965,124.914287,112.109623,95.278628,83.711464,89.013070,81.812153,131.306700,102.466618,117.253083,80.989719,102.715527,117.667929,94.974839,115.466717,83.731481,79.547927,105.691009,94.312353,109.630820,70.331681,110.683970,138.974559,99.630610,100.512132,102.693242,72.070364,106.392200,75.918854,93.584806,118.643043,88.971746,107.518735,115.191086,104.181113,79.435773,95.012871,129.391170,69.624314,95.863210,91.718379,101.811210,111.223234,124.130365,95.946514,112.185120,107.496102,107.115209,91.541141,85.040178,83.499353,88.653442,104.825299,111.414241,104.852033,91.765674,127.089552,122.782984,94.689998,87.648529,101.953224,119.009480,104.991475,108.348231,96.818798,106.844063,123.168167,96.404968,102.149616,103.807247,104.255880,78.821667,71.846970,84.705174,102.519134,108.307842,92.039882,120.658862,97.852360,100.304740,97.090542,102.010402,110.567111,109.984802,86.523656,122.854957,83.574603,101.188405,95.884051,84.265125,98.873191,88.887793,101.093609,106.046289,122.078941,104.610763,90.831620,94.125703,102.099672,101.401912,121.893839,120.930294,94.615961,91.770368,61.644181,91.766194,85.329134,94.677633,105.873764,102.657885,99.550480,102.993732,98.108233,102.955284,51.534175,95.960598,98.337239,94.881074,96.730806,110.549652,91.028420,133.010531,110.324454,99.905391,96.900065,98.702166,86.270394,98.571962,104.180253,108.693124,108.695347,95.876837,78.758766,89.963461,124.182896,113.440875,105.544294,88.580586,100.054677,81.164970,91.720947,96.321950,94.575401,114.349029,78.719111,87.018516,79.379680,81.439702,101.860838,75.993392,111.308032,96.297763,101.031825,104.838651,93.487502,115.487196,97.084859,108.911054,97.013314,104.363116,104.194940,103.749549,85.385382,106.538137,95.215645,109.457320,67.712598,78.023257,105.451683,127.943914,112.525881,89.763236,74.619214,111.140293,98.791252,108.860563,101.729481,100.444644,144.379382,99.908051,97.611322,98.178270,91.246949,114.851993,94.693685,109.539141,104.269045,118.284788,106.302694,81.799228,80.102683,121.125537,90.869338,80.190961,89.955721,118.969379,78.696805,87.002572,89.997887,81.232152,82.235090,77.228380,93.082189,94.676368,89.761928,75.194532,118.800039,80.063818,104.170506,83.878501,110.024753,114.337485,86.835796,71.144264,110.436810,128.137008,106.235418,102.408166,112.296409,111.475823,87.565167,90.112730,109.166853,97.839800,119.749084,89.434868,111.259149,105.139570,98.103437,117.638662,110.201073,84.925493,109.603280,120.624859,98.043330,96.270162,89.955293,99.795942,110.293010,87.734976,79.804637,94.363751,79.304125,107.848277,93.599653,73.668972,94.770887,97.110775,106.737034,97.819547,128.030897,92.219442,99.064022,98.456341,95.760574,102.136384,108.118469,120.101481,76.461158,92.344857,93.283429,114.067754,94.650054,71.572366,101.315957,99.494662,102.696273,84.397557,125.785520,95.142103,97.175547,86.499871,86.034970,81.658946,94.100337,85.636272,130.847010,71.672614,83.075042,93.978784,110.102369,93.793647,110.139451,85.197942,100.889367,126.160616,85.483834,106.293515,103.103913,66.226975,91.165442,116.967279,102.026165,81.815966,110.361659,92.813156,105.400761,105.653802,83.219566,111.847421,84.887368,80.413212,86.757565,94.808649,101.641047,88.411244,111.172290,103.771963,89.578027,113.334894,117.416025,98.519730,96.775254,73.393430,93.887311,95.627399,103.680691,97.473604,103.660404,123.011354,92.051289,92.635416,80.362520,99.870093,114.652195,73.733945,90.012145,100.539108,112.751543,105.743054,104.881954,96.635308,107.228114,115.214558,74.365123,110.928031,98.518603,92.050167,63.353863,79.294730,125.470885,89.671772,83.728468,93.153611,88.822792,101.865379,122.754605,91.200761,102.314351,82.791443,122.802497,102.835652,83.772713,113.564593,117.999815,102.421845,75.409045,126.777532,104.651838,117.556814,91.736602,94.020641,101.656797,116.701025,102.144850,81.147493,103.929838,124.443013,100.987094,101.940783,81.061844,78.955164,90.434618,95.102235,101.560911];
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const slider = document.getElementById("bins");
+const bubble = document.getElementById("bins-bubble");
+const plot = document.getElementById("hist_plot");
+const layout = document.getElementById("layout");
+const toggle = document.getElementById("toggle");
+
+// Equal-width bins over [min, max], last bin right-closed, density=True (like np.histogram).
+function histogram(data, nBins) {
+  let lo = Infinity, hi = -Infinity;
+  for (const v of data) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const width = (hi - lo) / nBins;
+  const counts = new Array(nBins).fill(0);
+  for (const v of data) counts[Math.min(Math.floor((v - lo) / width), nBins - 1)]++;
+  const edges = Array.from({ length: nBins + 1 }, (_, i) => lo + i * width);
+  const density = counts.map(c => c / (data.length * width));
+  return { edges, counts, density };
+}
+
+// Tick locations similar to matplotlib's MaxNLocator (steps 1, 2, 2.5, 5, 10).
+function niceTicks(lo, hi, maxTicks) {
+  const raw = (hi - lo) / maxTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  let decimals = 0;
+  while (decimals < 10 && Math.abs(Math.round(step * 10 ** decimals) - step * 10 ** decimals) > 1e-9) decimals++;
+  const ticks = [];
+  for (let t = Math.ceil(lo / step - 1e-9) * step; t <= hi + 1e-9 * step; t += step) ticks.push(t);
+  return ticks.map(t => ({ value: t, label: t.toFixed(decimals) }));
+}
+
+function el(name, attrs, parent, text) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function render() {
+  const nBins = Number(slider.value);
+  const W = Math.max(plot.clientWidth, 280);
+  const H = plot.clientHeight;
+  const { edges, counts, density } = histogram(DATA, nBins);
+
+  // Axis limits: 5% x-margin on both sides, y sticks to 0 with 5% headroom (matplotlib defaults).
+  const xSpan = edges[nBins] - edges[0];
+  const x0 = edges[0] - 0.05 * xSpan, x1 = edges[nBins] + 0.05 * xSpan;
+  const y1 = Math.max(...density) * 1.05;
+
+  const xTicks = niceTicks(x0, x1, W < 450 ? 5 : 9);
+  const yTicks = niceTicks(0, y1, 8);
+  const yLabelChars = Math.max(...yTicks.map(t => t.label.length));
+  const m = { top: 34, right: 16, bottom: 52, left: 30 + yLabelChars * 7.5 };
+  const pw = W - m.left - m.right, ph = H - m.top - m.bottom;
+  const sx = v => m.left + ((v - x0) / (x1 - x0)) * pw;
+  const sy = v => m.top + ph - (v / y1) * ph;
+
+  const svg = el("svg", {
+    width: W, height: H, viewBox: `0 0 ${W} ${H}`,
+    role: "img", "aria-label": "A histogram of random data",
+  });
+  el("title", {}, svg, "A histogram of random data");
+
+  const bars = el("g", {}, svg);
+  for (let i = 0; i < nBins; i++) {
+    const xa = sx(edges[i]), xb = sx(edges[i + 1]);
+    const rect = el("rect", {
+      class: "bar", x: xa, y: sy(density[i]), width: Math.max(xb - xa, 0), height: sy(0) - sy(density[i]),
+      "shape-rendering": "crispEdges",
+    }, bars);
+    el("title", {}, rect,
+      `${edges[i].toFixed(2)} – ${edges[i + 1].toFixed(2)}\ncount: ${counts[i]}\ndensity: ${density[i].toFixed(5)}`);
+  }
+
+  // Axes frame (all four spines, like matplotlib's default style).
+  el("rect", { x: m.left, y: m.top, width: pw, height: ph, fill: "none", stroke: "#000", "stroke-width": 0.8 }, svg);
+
+  const axes = el("g", { "font-size": 12 }, svg);
+  for (const t of xTicks) {
+    const x = sx(t.value);
+    el("line", { x1: x, x2: x, y1: m.top + ph, y2: m.top + ph + 4, stroke: "#000", "stroke-width": 0.8 }, axes);
+    el("text", { x, y: m.top + ph + 18, "text-anchor": "middle" }, axes, t.label);
+  }
+  for (const t of yTicks) {
+    const y = sy(t.value);
+    el("line", { x1: m.left - 4, x2: m.left, y1: y, y2: y, stroke: "#000", "stroke-width": 0.8 }, axes);
+    el("text", { x: m.left - 7, y, "text-anchor": "end", "dominant-baseline": "middle" }, axes, t.label);
+  }
+
+  el("text", { x: m.left + pw / 2, y: H - 12, "text-anchor": "middle", "font-size": 13 }, svg, "Value");
+  el("text", {
+    x: 0, y: 0, "text-anchor": "middle", "font-size": 13,
+    transform: `translate(14 ${m.top + ph / 2}) rotate(-90)`,
+  }, svg, "Frequency");
+  el("text", { x: m.left + pw / 2, y: m.top - 12, "text-anchor": "middle", "font-size": 15 }, svg, "Histogram of Random Data");
+
+  plot.replaceChildren(svg);
+}
+
+function updateSlider() {
+  const min = Number(slider.min), max = Number(slider.max), v = Number(slider.value);
+  const frac = (v - min) / (max - min);
+  slider.style.setProperty("--pct", `${frac * 100}%`);
+  bubble.textContent = v;
+  // Keep the bubble centred over the 16px thumb.
+  bubble.style.left = `calc(${frac * 100}% + ${8 - frac * 16}px)`;
+}
+
+function buildGrid() {
+  const grid = document.getElementById("bins-grid");
+  const min = Number(slider.min), max = Number(slider.max);
+  for (let v = min; v <= max; v += 5) {
+    const span = document.createElement("span");
+    span.style.left = `${((v - min) / (max - min)) * 100}%`;
+    span.textContent = v;
+    grid.appendChild(span);
+  }
+}
+
+slider.addEventListener("input", () => { updateSlider(); render(); });
+
+toggle.addEventListener("click", () => {
+  const collapsed = layout.classList.toggle("collapsed");
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+});
+
+let lastWidth = 0;
+new ResizeObserver(() => {
+  if (plot.clientWidth !== lastWidth) { lastWidth = plot.clientWidth; render(); }
+}).observe(plot);
+
+buildGrid();
+updateSlider();
+render();
+</script>
+</body>
+</html>
