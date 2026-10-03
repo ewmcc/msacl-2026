@@ -2,7 +2,9 @@
 
 A beginner-friendly demo of [pyhamilton](https://github.com/dgretton/pyhamilton), which controls a Hamilton STAR liquid handler from Python.
 
-The notebook [pyhamilton_demo.ipynb](pyhamilton_demo.ipynb) loads the VENUS layout
+The notebook [pyhamilton_demo.ipynb](pyhamilton_demo.ipynb) and the script [pyhamilton_demo.py](pyhamilton_demo.py) run the same procedure.
+The notebook explains each step; the script is how you would deploy a method in production.
+Both load the VENUS layout
 `C:\Program Files (x86)\HAMILTON\Methods\Demo\msacl-2026-demo.lay` and runs these steps:
 
 1. Adds 700 uL of internal standard (acetonitrile) from the center trough to every well of the 96-well plate.
@@ -54,3 +56,15 @@ This copies pyhamilton's HSL libraries into `C:\Program Files (x86)\HAMILTON\Lib
 2. Open `pyhamilton_demo.ipynb` in VS Code, or run `jupyter notebook`.
 3. Select the `.venv` Python kernel.
 4. Run the cells from top to bottom. VENUS Run Control opens and shows each step.
+
+### Run as a script
+
+1. In the VENUS System Configuration Editor, turn on **Simulation** mode for a dry run.
+2. Open a terminal in this folder and run:
+
+   ```
+   .venv\Scripts\activate
+   python pyhamilton_demo.py
+   ```
+
+3. When VENUS Run Control opens, press the green **Play** button. The script logs each column and batch as it runs, and closes Run Control when it finishes or if a step fails.
